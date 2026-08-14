@@ -1,0 +1,581 @@
+<title>Apigee X Installer — config generator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#111725; --panel2:#0e1420; --ink:#e6edf6; --muted:#8b97a8;
+    --line:#1f2a3d; --accent:#4f8cff; --accent2:#7c5cff; --ok:#39d98a; --warn:#ffcb6b;
+    --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,#15203a 0,transparent 60%),var(--bg);
+       color:var(--ink);font-family:var(--sans);line-height:1.5}
+  header{padding:28px 24px 8px;max-width:1200px;margin:0 auto}
+  .badge{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+         text-transform:uppercase;color:var(--accent);border:1px solid var(--line);
+         padding:4px 10px;border-radius:999px;background:var(--panel)}
+  h1{margin:14px 0 4px;font-size:26px;font-weight:650;letter-spacing:-.02em}
+  h1 .x{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;
+        background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:14px;max-width:70ch}
+  main{max-width:1200px;margin:0 auto;padding:16px 24px 64px;display:grid;
+       grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start}
+  @media(max-width:940px){main{grid-template-columns:1fr}}
+  fieldset{border:1px solid var(--line);border-radius:14px;margin:0 0 16px;padding:14px 16px 18px;
+           background:linear-gradient(180deg,var(--panel),var(--panel2))}
+  legend{padding:0 8px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+          text-transform:uppercase;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+  @media(max-width:560px){.grid{grid-template-columns:1fr}}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0}
+  label{font-size:12.5px;color:var(--ink);font-weight:550}
+  .req{color:var(--accent2);margin-left:3px}
+  input,select{width:100%;background:#0a0e17;border:1px solid var(--line);color:var(--ink);
+    border-radius:9px;padding:9px 11px;font-family:var(--mono);font-size:12.5px;outline:none;
+    transition:border-color .15s,box-shadow .15s}
+  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,140,255,.18)}
+  input.invalid{border-color:#ff6b6b;box-shadow:0 0 0 3px rgba(255,107,107,.15)}
+  .help{font-size:11px;color:var(--muted)}
+  .out{position:sticky;top:16px}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border-radius:10px;padding:9px 15px;
+    border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;
+    transition:transform .05s,border-color .15s,background .15s}
+  button:hover{border-color:var(--accent)}
+  button:active{transform:translateY(1px)}
+  button.primary{background:linear-gradient(90deg,var(--accent),var(--accent2));border:none;color:#fff}
+  .filename{font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:auto}
+  pre{margin:0;background:#070b12;border:1px solid var(--line);border-radius:14px;padding:16px;
+    overflow:auto;max-height:74vh;font-family:var(--mono);font-size:12px;line-height:1.55;color:#cdd7e5}
+  .note{font-size:12px;color:var(--muted);margin-top:10px}
+  .note code{font-family:var(--mono);background:var(--panel);padding:1px 6px;border-radius:6px;border:1px solid var(--line)}
+  .warn{color:var(--warn)}
+  a{color:var(--accent)}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ok);color:#04110a;
+    font-weight:700;font-size:13px;padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;
+    transition:opacity .2s}
+  .toast.show{opacity:1}
+</style>
+
+<header>
+  <span class="badge">Apigee X · service-account impersonation</span>
+  <h1>Apigee <span class="x">X</span> installer — config generator</h1>
+  <p class="sub">Fill in the variables, then download a ready-to-run
+  <code>provision-apigee-x.sh</code>. It provisions the org, runtime instance,
+  environment and env group via <strong>service-account impersonation</strong>
+  (no key files). Load-balancer / exposure is intentionally left to you.</p>
+</header>
+
+<main>
+  <section class="cfg"><fieldset data-group="Required"><legend>Required</legend><div class="grid"><div class="field" data-field="PROJECT_ID"><label for="PROJECT_ID">Project ID<span class="req">*</span></label><input id="PROJECT_ID" data-key="PROJECT_ID" type="text" value="" placeholder="my-gcp-project" required><span class="help">GCP project id — also becomes the Apigee org id.</span></div><div class="field" data-field="SA_EMAIL"><label for="SA_EMAIL">Service account to impersonate<span class="req">*</span></label><input id="SA_EMAIL" data-key="SA_EMAIL" type="text" value="" placeholder="apigee-provisioner@my-gcp-project.iam.gserviceaccount.com" required><span class="help">You need roles/iam.serviceAccountTokenCreator on it.</span></div></div></fieldset>
+<fieldset data-group="Org"><legend>Org</legend><div class="grid"><div class="field" data-field="ORG_TYPE"><label for="ORG_TYPE">Org type</label><select id="ORG_TYPE" data-key="ORG_TYPE"><option value="eval" selected>eval</option><option value="paid">paid</option></select><span class="help">Evaluation (trial) or paid org.</span></div><div class="field" data-field="PAID_BILLING_TYPE"><label for="PAID_BILLING_TYPE">Paid billing type</label><select id="PAID_BILLING_TYPE" data-key="PAID_BILLING_TYPE"><option value="PAYG" selected>PAYG</option><option value="SUBSCRIPTION">SUBSCRIPTION</option></select><span class="help">Only used when Org type = paid.</span></div></div></fieldset>
+<fieldset data-group="Regions"><legend>Regions</legend><div class="grid"><div class="field" data-field="ANALYTICS_REGION"><label for="ANALYTICS_REGION">Analytics region</label><input id="ANALYTICS_REGION" data-key="ANALYTICS_REGION" type="text" value="us-west1" placeholder=""><span class="help">Apigee analytics region.</span></div><div class="field" data-field="RUNTIME_LOCATION"><label for="RUNTIME_LOCATION">Runtime location</label><input id="RUNTIME_LOCATION" data-key="RUNTIME_LOCATION" type="text" value="us-west1" placeholder=""><span class="help">Region for the runtime instance.</span></div></div></fieldset>
+<fieldset data-group="Names"><legend>Names</legend><div class="grid"><div class="field" data-field="INSTANCE_NAME"><label for="INSTANCE_NAME">Instance name</label><input id="INSTANCE_NAME" data-key="INSTANCE_NAME" type="text" value="instance-1" placeholder=""></div><div class="field" data-field="ENV_NAME"><label for="ENV_NAME">Environment name</label><input id="ENV_NAME" data-key="ENV_NAME" type="text" value="eval-env" placeholder=""></div><div class="field" data-field="ENVGROUP_NAME"><label for="ENVGROUP_NAME">Env group name</label><input id="ENVGROUP_NAME" data-key="ENVGROUP_NAME" type="text" value="eval-group" placeholder=""></div><div class="field" data-field="ENVGROUP_HOSTNAME"><label for="ENVGROUP_HOSTNAME">Env group hostname</label><input id="ENVGROUP_HOSTNAME" data-key="ENVGROUP_HOSTNAME" type="text" value="api.example.com" placeholder=""><span class="help">Hostname clients will call (set DNS later).</span></div></div></fieldset>
+<fieldset data-group="Networking"><legend>Networking</legend><div class="grid"><div class="field" data-field="NETWORKING"><label for="NETWORKING">Networking</label><select id="NETWORKING" data-key="NETWORKING"><option value="nopeering" selected>nopeering</option><option value="peering">peering</option></select><span class="help">nopeering = modern PSC path (recommended).</span></div><div class="field" data-field="AUTHORIZED_NETWORK"><label for="AUTHORIZED_NETWORK">Authorized VPC network</label><input id="AUTHORIZED_NETWORK" data-key="AUTHORIZED_NETWORK" type="text" value="default" placeholder=""><span class="help">peering only.</span></div><div class="field" data-field="PEERING_RANGE_NAME"><label for="PEERING_RANGE_NAME">Peering range name</label><input id="PEERING_RANGE_NAME" data-key="PEERING_RANGE_NAME" type="text" value="apigee-range" placeholder=""><span class="help">peering only.</span></div></div></fieldset>
+<fieldset data-group="Encryption"><legend>Encryption</legend><div class="grid"><div class="field" data-field="PROVISION_KMS"><label for="PROVISION_KMS">Create KMS DB key</label><select id="PROVISION_KMS" data-key="PROVISION_KMS"><option value="true" selected>true</option><option value="false">false</option></select><span class="help">Required for paid orgs; optional for eval.</span></div><div class="field" data-field="KMS_LOCATION"><label for="KMS_LOCATION">KMS location</label><input id="KMS_LOCATION" data-key="KMS_LOCATION" type="text" value="us-west1" placeholder=""><span class="help">Region or &#x27;global&#x27;.</span></div><div class="field" data-field="KMS_KEYRING"><label for="KMS_KEYRING">KMS key ring</label><input id="KMS_KEYRING" data-key="KMS_KEYRING" type="text" value="apigee-keyring" placeholder=""></div><div class="field" data-field="KMS_KEY"><label for="KMS_KEY">KMS key</label><input id="KMS_KEY" data-key="KMS_KEY" type="text" value="apigee-db-key" placeholder=""></div><div class="field" data-field="DISK_KMS_KEY"><label for="DISK_KMS_KEY">Instance disk CMEK</label><input id="DISK_KMS_KEY" data-key="DISK_KMS_KEY" type="text" value="" placeholder=""><span class="help">Optional full key path; blank = Google-managed.</span></div></div></fieldset>
+<fieldset data-group="Behavior"><legend>Behavior</legend><div class="grid"><div class="field" data-field="POLL_INTERVAL"><label for="POLL_INTERVAL">Poll interval (s)</label><input id="POLL_INTERVAL" data-key="POLL_INTERVAL" type="number" value="15" placeholder=""><span class="help">Seconds between long-running-op polls.</span></div><div class="field" data-field="AUTO_APPROVE"><label for="AUTO_APPROVE">Auto approve</label><select id="AUTO_APPROVE" data-key="AUTO_APPROVE"><option value="false" selected>false</option><option value="true">true</option></select><span class="help">Skip the confirmation prompt.</span></div><div class="field" data-field="DRY_RUN"><label for="DRY_RUN">Dry run</label><select id="DRY_RUN" data-key="DRY_RUN"><option value="false" selected>false</option><option value="true">true</option></select><span class="help">Print planned calls; change nothing.</span></div></div></fieldset></section>
+
+  <section class="out">
+    <div class="toolbar">
+      <button class="primary" id="dl">⬇ Download script</button>
+      <button id="copy">⧉ Copy</button>
+      <span class="filename">provision-apigee-x.sh</span>
+    </div>
+    <pre id="preview"><code></code></pre>
+    <p class="note">After downloading: <code>chmod +x provision-apigee-x.sh &amp;&amp; ./provision-apigee-x.sh</code>.
+    Your values are baked in as defaults but each is still overridable by an env var of the same name.
+    Requires <code>gcloud</code>, <code>curl</code>, <code>jq</code>. <span class="warn">Tip:</span>
+    set <code>DRY_RUN=true</code> for a no-op preview run first.</p>
+  </section>
+</main>
+
+<div class="toast" id="toast">Copied</div>
+
+<script type="text/plain" id="tpl">#!/usr/bin/env bash
+#
+# provision-apigee-x.sh
+# ---------------------------------------------------------------------------
+# Provision Apigee X (org + instance + environment + environment group) on
+# Google Cloud using **service account impersonation** — no SA key files.
+#
+#   • Networking: non-VPC-peering (&quot;modern&quot;) by default; classic VPC peering
+#     is also supported via the NETWORKING variable.
+#   • Org type:   eval or paid, selected with ORG_TYPE.
+#   • Exposure:   NOT configured. This script stops after the runtime is up.
+#                 Wire up your (external/internal) load balancer afterwards.
+#
+# EDIT THE &quot;USER CONFIG&quot; BLOCK BELOW, then:  bash provision-apigee-x.sh
+#
+# ---------------------------------------------------------------------------
+# Prerequisites
+#   - gcloud, curl, jq installed and on PATH.
+#   - You (the caller running gcloud) are authenticated:  gcloud auth login
+#   - You hold  roles/iam.serviceAccountTokenCreator  on SA_EMAIL so you can
+#     impersonate it.
+#   - SA_EMAIL (the impersonated service account) holds, at minimum:
+#         roles/apigee.admin
+#         roles/serviceusage.serviceUsageAdmin   (to enable APIs)
+#         roles/cloudkms.admin                   (if PROVISION_KMS=true)
+#         roles/compute.networkAdmin             (only if NETWORKING=peering)
+#     …on PROJECT_ID.
+#   - For ORG_TYPE=paid the project must be linked to an active billing account.
+# ---------------------------------------------------------------------------
+
+set -euo pipefail
+
+# ===========================================================================
+# ============================  USER CONFIG  ================================
+# ===========================================================================
+# Every value below may also be overridden by an environment variable of the
+# same name (e.g.  PROJECT_ID=my-proj bash provision-apigee-x.sh).
+
+# --- Required -------------------------------------------------------------
+PROJECT_ID=&quot;${PROJECT_ID:-{{PROJECT_ID}}}&quot;                       # GCP project id (== Apigee org id)
+SA_EMAIL=&quot;${SA_EMAIL:-{{SA_EMAIL}}}&quot;                            # service account to IMPERSONATE
+
+# --- Org type -------------------------------------------------------------
+ORG_TYPE=&quot;${ORG_TYPE:-{{ORG_TYPE}}}&quot;                        # eval | paid
+PAID_BILLING_TYPE=&quot;${PAID_BILLING_TYPE:-{{PAID_BILLING_TYPE}}}&quot;      # PAYG | SUBSCRIPTION  (only when ORG_TYPE=paid)
+
+# --- Regions --------------------------------------------------------------
+ANALYTICS_REGION=&quot;${ANALYTICS_REGION:-{{ANALYTICS_REGION}}}&quot;    # Apigee analytics region
+RUNTIME_LOCATION=&quot;${RUNTIME_LOCATION:-{{RUNTIME_LOCATION}}}&quot;    # runtime instance region
+
+# --- Names ----------------------------------------------------------------
+INSTANCE_NAME=&quot;${INSTANCE_NAME:-{{INSTANCE_NAME}}}&quot;
+ENV_NAME=&quot;${ENV_NAME:-{{ENV_NAME}}}&quot;
+ENVGROUP_NAME=&quot;${ENVGROUP_NAME:-{{ENVGROUP_NAME}}}&quot;
+ENVGROUP_HOSTNAME=&quot;${ENVGROUP_HOSTNAME:-{{ENVGROUP_HOSTNAME}}}&quot;
+
+# --- Networking -----------------------------------------------------------
+NETWORKING=&quot;${NETWORKING:-{{NETWORKING}}}&quot;               # nopeering | peering
+AUTHORIZED_NETWORK=&quot;${AUTHORIZED_NETWORK:-{{AUTHORIZED_NETWORK}}}&quot; # (peering only) VPC network name
+PEERING_RANGE_NAME=&quot;${PEERING_RANGE_NAME:-{{PEERING_RANGE_NAME}}}&quot; # (peering only) reserved range name
+
+# --- Encryption (runtime database key) ------------------------------------
+# Required for paid orgs; optional for eval. Set PROVISION_KMS=true to have the
+# script create the key ring/key and grant the Apigee service agent access.
+PROVISION_KMS=&quot;${PROVISION_KMS:-{{PROVISION_KMS}}}&quot;              # true | false
+KMS_LOCATION=&quot;${KMS_LOCATION:-{{KMS_LOCATION}}}&quot;            # region for the key ring (or &quot;global&quot;)
+KMS_KEYRING=&quot;${KMS_KEYRING:-{{KMS_KEYRING}}}&quot;
+KMS_KEY=&quot;${KMS_KEY:-{{KMS_KEY}}}&quot;
+DISK_KMS_KEY=&quot;${DISK_KMS_KEY:-{{DISK_KMS_KEY}}}&quot;                    # optional full CMEK path for instance disk; blank = Google-managed
+
+# --- Behavior -------------------------------------------------------------
+POLL_INTERVAL=&quot;${POLL_INTERVAL:-{{POLL_INTERVAL}}}&quot;               # seconds between long-running-op polls
+AUTO_APPROVE=&quot;${AUTO_APPROVE:-{{AUTO_APPROVE}}}&quot;              # true = don&#x27;t prompt before provisioning
+DRY_RUN=&quot;${DRY_RUN:-{{DRY_RUN}}}&quot;                        # true = print planned calls, change nothing
+
+# ===========================================================================
+# =====================  END USER CONFIG (edit above)  ======================
+# ===========================================================================
+
+
+# ---------------------------- internals ------------------------------------
+readonly APIGEE_API=&quot;https://apigee.googleapis.com/v1&quot;
+API_OUT=&quot;$(mktemp)&quot;; readonly API_OUT
+HTTP_CODE=&quot;&quot;
+trap &#x27;rm -f &quot;$API_OUT&quot;&#x27; EXIT
+
+c_red=$&#x27;\033[31m&#x27;; c_grn=$&#x27;\033[32m&#x27;; c_ylw=$&#x27;\033[33m&#x27;; c_blu=$&#x27;\033[36m&#x27;; c_off=$&#x27;\033[0m&#x27;
+log()  { printf &#x27;%s[+]%s %s\n&#x27; &quot;$c_grn&quot; &quot;$c_off&quot; &quot;$*&quot;; }
+info() { printf &#x27;%s[i]%s %s\n&#x27; &quot;$c_blu&quot; &quot;$c_off&quot; &quot;$*&quot;; }
+warn() { printf &#x27;%s[!]%s %s\n&#x27; &quot;$c_ylw&quot; &quot;$c_off&quot; &quot;$*&quot; &gt;&amp;2; }
+err()  { printf &#x27;%s[x]%s %s\n&#x27; &quot;$c_red&quot; &quot;$c_off&quot; &quot;$*&quot; &gt;&amp;2; }
+die()  { err &quot;$*&quot;; exit 1; }
+
+# Case helpers (bash 3.2 on macOS lacks ${var,,} / ${var^^}).
+lc() { printf &#x27;%s&#x27; &quot;${1:-}&quot; | tr &#x27;[:upper:]&#x27; &#x27;[:lower:]&#x27;; }
+uc() { printf &#x27;%s&#x27; &quot;${1:-}&quot; | tr &#x27;[:lower:]&#x27; &#x27;[:upper:]&#x27;; }
+
+is_true() { case &quot;$(lc &quot;${1:-}&quot;)&quot; in true|1|yes|y) return 0 ;; *) return 1 ;; esac; }
+
+confirm() {
+  is_true &quot;$AUTO_APPROVE&quot; &amp;&amp; return 0
+  local reply
+  read -r -p &quot;$1 [y/N] &quot; reply
+  case &quot;$(lc &quot;$reply&quot;)&quot; in y|yes) return 0 ;; *) return 1 ;; esac
+}
+
+# Fresh, short-lived impersonated token for every REST call (survives long ops).
+get_token() {
+  gcloud auth print-access-token --impersonate-service-account=&quot;$SA_EMAIL&quot; 2&gt;/dev/null \
+    || die &quot;Could not mint an access token by impersonating ${SA_EMAIL}.
+    Ensure you have roles/iam.serviceAccountTokenCreator on that service account
+    and that &#x27;gcloud auth login&#x27; has been completed.&quot;
+}
+
+# api METHOD URL [BODY] -&gt; writes response body to $API_OUT, sets $HTTP_CODE.
+api() {
+  local method=&quot;$1&quot; url=&quot;$2&quot; body=&quot;${3:-}&quot; token
+  token=&quot;$(get_token)&quot;
+  local args=(-sS -o &quot;$API_OUT&quot; -w &#x27;%{http_code}&#x27; -X &quot;$method&quot; &quot;$url&quot;
+              -H &quot;Authorization: Bearer ${token}&quot;)
+  [[ -n &quot;$body&quot; ]] &amp;&amp; args+=(-H &quot;Content-Type: application/json&quot; -d &quot;$body&quot;)
+  HTTP_CODE=&quot;$(curl &quot;${args[@]}&quot;)&quot;
+}
+
+resource_exists() { api GET &quot;$1&quot;; [[ &quot;$HTTP_CODE&quot; == &quot;200&quot; ]]; }
+
+api_ok() { [[ &quot;$HTTP_CODE&quot; == &quot;200&quot; || &quot;$HTTP_CODE&quot; == &quot;201&quot; ]]; }
+
+show_response_error() { jq . &quot;$API_OUT&quot; 2&gt;/dev/null &gt;&amp;2 || cat &quot;$API_OUT&quot; &gt;&amp;2; }
+
+# Poll an Apigee long-running operation until done.  wait_for_op OP_NAME DESC
+wait_for_op() {
+  local op_name=&quot;$1&quot; desc=&quot;$2&quot;
+  [[ -z &quot;$op_name&quot; || &quot;$op_name&quot; == &quot;null&quot; ]] &amp;&amp; { warn &quot;No operation name returned for &#x27;${desc}&#x27;; skipping wait.&quot;; return 0; }
+  info &quot;Waiting for: ${desc}&quot;
+  info &quot;  operation: ${op_name}&quot;
+  while true; do
+    api GET &quot;${APIGEE_API}/${op_name}&quot;
+    if [[ &quot;$HTTP_CODE&quot; == &quot;200&quot; ]]; then
+      if [[ &quot;$(jq -r &#x27;.done // false&#x27; &quot;$API_OUT&quot;)&quot; == &quot;true&quot; ]]; then
+        if jq -e &#x27;has(&quot;error&quot;)&#x27; &quot;$API_OUT&quot; &gt;/dev/null 2&gt;&amp;1; then
+          err &quot;Operation FAILED: ${desc}&quot;; jq &#x27;.error&#x27; &quot;$API_OUT&quot; &gt;&amp;2; exit 1
+        fi
+        printf &#x27;\n&#x27;; log &quot;Done: ${desc}&quot;; return 0
+      fi
+    else
+      warn &quot;poll HTTP ${HTTP_CODE} (will retry)&quot;
+    fi
+    printf &#x27;.&#x27;; sleep &quot;$POLL_INTERVAL&quot;
+  done
+}
+
+gc() { # gcloud wrapper honoring DRY_RUN
+  if is_true &quot;$DRY_RUN&quot;; then info &quot;[dry-run] gcloud $*&quot;; return 0; fi
+  gcloud &quot;$@&quot;
+}
+
+# --------------------------- derived values --------------------------------
+ORG_TYPE=&quot;$(lc &quot;$ORG_TYPE&quot;)&quot;
+NETWORKING=&quot;$(lc &quot;$NETWORKING&quot;)&quot;
+
+case &quot;$ORG_TYPE&quot; in
+  eval) BILLING_TYPE=&quot;EVALUATION&quot; ;;
+  paid) BILLING_TYPE=&quot;$(uc &quot;$PAID_BILLING_TYPE&quot;)&quot; ;;
+  *)    die &quot;ORG_TYPE must be &#x27;eval&#x27; or &#x27;paid&#x27; (got: ${ORG_TYPE})&quot; ;;
+esac
+
+case &quot;$NETWORKING&quot; in
+  nopeering|peering) : ;;
+  *) die &quot;NETWORKING must be &#x27;nopeering&#x27; or &#x27;peering&#x27; (got: ${NETWORKING})&quot; ;;
+esac
+
+ORG=&quot;$PROJECT_ID&quot;
+DB_KEY_NAME=&quot;&quot;   # set later if PROVISION_KMS
+
+# ------------------------------ preflight ----------------------------------
+preflight() {
+  for c in gcloud curl jq; do command -v &quot;$c&quot; &gt;/dev/null 2&gt;&amp;1 || die &quot;Missing dependency: $c&quot;; done
+  [[ -n &quot;$PROJECT_ID&quot; ]] || die &quot;PROJECT_ID is empty — set it in the USER CONFIG block.&quot;
+  [[ -n &quot;$SA_EMAIL&quot;   ]] || die &quot;SA_EMAIL is empty — set it in the USER CONFIG block.&quot;
+  if [[ &quot;$BILLING_TYPE&quot; == &quot;PAYG&quot; || &quot;$BILLING_TYPE&quot; == &quot;SUBSCRIPTION&quot; || &quot;$ORG_TYPE&quot; == &quot;paid&quot; ]]; then
+    is_true &quot;$PROVISION_KMS&quot; || warn &quot;Paid orgs require a runtime DB encryption key; PROVISION_KMS is false.&quot;
+  fi
+  # Impersonation must actually work before we start creating things.
+  log &quot;Verifying impersonation of ${SA_EMAIL} ...&quot;
+  get_token &gt;/dev/null
+  log &quot;Impersonation OK.&quot;
+  # Confirm the project is reachable &amp; capture its number.
+  PROJECT_NUMBER=&quot;$(gcloud projects describe &quot;$PROJECT_ID&quot; \
+      --impersonate-service-account=&quot;$SA_EMAIL&quot; --format=&#x27;value(projectNumber)&#x27; 2&gt;/dev/null)&quot; \
+    || die &quot;Cannot describe project &#x27;${PROJECT_ID}&#x27; as ${SA_EMAIL}.&quot;
+  APIGEE_AGENT=&quot;service-${PROJECT_NUMBER}@gcp-sa-apigee.iam.gserviceaccount.com&quot;
+}
+
+print_plan() {
+  cat &lt;&lt;PLAN
+
+${c_blu}==================== Apigee X provisioning plan ====================${c_off}
+  Project            : ${PROJECT_ID}  (#${PROJECT_NUMBER})
+  Impersonating SA   : ${SA_EMAIL}
+  Org type / billing : ${ORG_TYPE}  -&gt;  ${BILLING_TYPE}
+  Analytics region   : ${ANALYTICS_REGION}
+  Runtime location   : ${RUNTIME_LOCATION}
+  Instance           : ${INSTANCE_NAME}
+  Environment        : ${ENV_NAME}
+  Env group          : ${ENVGROUP_NAME}  (host: ${ENVGROUP_HOSTNAME})
+  Networking         : ${NETWORKING}$( [[ &quot;$NETWORKING&quot; == peering ]] &amp;&amp; printf &#x27;  (network=%s, range=%s)&#x27; &quot;$AUTHORIZED_NETWORK&quot; &quot;$PEERING_RANGE_NAME&quot; )
+  Provision KMS key  : ${PROVISION_KMS}$( is_true &quot;$PROVISION_KMS&quot; &amp;&amp; printf &#x27;  (%s/%s/%s @ %s)&#x27; &quot;$KMS_KEYRING&quot; &quot;$KMS_KEY&quot; &quot;&quot; &quot;$KMS_LOCATION&quot; )
+  Dry run            : ${DRY_RUN}
+${c_blu}====================================================================${c_off}
+
+  NOTE: no load balancer / external exposure is configured by this script.
+PLAN
+}
+
+enable_apis() {
+  local apis=(apigee.googleapis.com serviceusage.googleapis.com compute.googleapis.com)
+  is_true &quot;$PROVISION_KMS&quot; &amp;&amp; apis+=(cloudkms.googleapis.com)
+  [[ &quot;$NETWORKING&quot; == peering ]] &amp;&amp; apis+=(servicenetworking.googleapis.com)
+  log &quot;Enabling APIs: ${apis[*]}&quot;
+  gc services enable &quot;${apis[@]}&quot; --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot;
+}
+
+ensure_service_agent() {
+  log &quot;Ensuring the Apigee service agent exists (${APIGEE_AGENT})&quot;
+  gc beta services identity create --service=apigee.googleapis.com \
+     --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot; || true
+}
+
+setup_kms() {
+  is_true &quot;$PROVISION_KMS&quot; || { info &quot;PROVISION_KMS=false — skipping KMS setup.&quot;; return 0; }
+  log &quot;Setting up Cloud KMS runtime database encryption key&quot;
+  if ! gcloud kms keyrings describe &quot;$KMS_KEYRING&quot; --location=&quot;$KMS_LOCATION&quot; \
+        --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot; &gt;/dev/null 2&gt;&amp;1; then
+    gc kms keyrings create &quot;$KMS_KEYRING&quot; --location=&quot;$KMS_LOCATION&quot; \
+       --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot;
+  else info &quot;  key ring ${KMS_KEYRING} already exists&quot;; fi
+
+  if ! gcloud kms keys describe &quot;$KMS_KEY&quot; --keyring=&quot;$KMS_KEYRING&quot; --location=&quot;$KMS_LOCATION&quot; \
+        --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot; &gt;/dev/null 2&gt;&amp;1; then
+    gc kms keys create &quot;$KMS_KEY&quot; --keyring=&quot;$KMS_KEYRING&quot; --location=&quot;$KMS_LOCATION&quot; \
+       --purpose=encryption --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot;
+  else info &quot;  key ${KMS_KEY} already exists&quot;; fi
+
+  log &quot;Granting the Apigee service agent encrypt/decrypt on the key&quot;
+  gc kms keys add-iam-policy-binding &quot;$KMS_KEY&quot; --keyring=&quot;$KMS_KEYRING&quot; --location=&quot;$KMS_LOCATION&quot; \
+     --member=&quot;serviceAccount:${APIGEE_AGENT}&quot; \
+     --role=&quot;roles/cloudkms.cryptoKeyEncrypterDecrypter&quot; \
+     --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot;
+
+  DB_KEY_NAME=&quot;projects/${PROJECT_ID}/locations/${KMS_LOCATION}/keyRings/${KMS_KEYRING}/cryptoKeys/${KMS_KEY}&quot;
+}
+
+setup_peering() {
+  [[ &quot;$NETWORKING&quot; == peering ]] || return 0
+  log &quot;Configuring VPC peering (network=${AUTHORIZED_NETWORK}, range=${PEERING_RANGE_NAME})&quot;
+  if ! gcloud compute addresses describe &quot;$PEERING_RANGE_NAME&quot; --global \
+        --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot; &gt;/dev/null 2&gt;&amp;1; then
+    gc compute addresses create &quot;$PEERING_RANGE_NAME&quot; --global --prefix-length=22 \
+       --description=&quot;Apigee runtime peering range&quot; --network=&quot;$AUTHORIZED_NETWORK&quot; \
+       --purpose=VPC_PEERING --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot;
+  else info &quot;  reserved range ${PEERING_RANGE_NAME} already exists&quot;; fi
+  gc services vpc-peerings connect --service=servicenetworking.googleapis.com \
+     --network=&quot;$AUTHORIZED_NETWORK&quot; --ranges=&quot;$PEERING_RANGE_NAME&quot; \
+     --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot;
+}
+
+create_org() {
+  if resource_exists &quot;${APIGEE_API}/organizations/${ORG}&quot;; then
+    info &quot;Organization ${ORG} already exists — skipping create.&quot;
+    return 0
+  fi
+  local body
+  if [[ &quot;$NETWORKING&quot; == nopeering ]]; then
+    body=&quot;$(jq -n --arg name &quot;$ORG&quot; --arg region &quot;$ANALYTICS_REGION&quot; --arg billing &quot;$BILLING_TYPE&quot; --arg key &quot;$DB_KEY_NAME&quot; \
+      &#x27;{name:$name, displayName:$name, analyticsRegion:$region, runtimeType:&quot;CLOUD&quot;, billingType:$billing, disableVpcPeering:true}
+       + (if $key==&quot;&quot; then {} else {runtimeDatabaseEncryptionKeyName:$key} end)&#x27;)&quot;
+  else
+    body=&quot;$(jq -n --arg name &quot;$ORG&quot; --arg region &quot;$ANALYTICS_REGION&quot; --arg billing &quot;$BILLING_TYPE&quot; --arg net &quot;$AUTHORIZED_NETWORK&quot; --arg key &quot;$DB_KEY_NAME&quot; \
+      &#x27;{name:$name, displayName:$name, analyticsRegion:$region, runtimeType:&quot;CLOUD&quot;, billingType:$billing, authorizedNetwork:$net}
+       + (if $key==&quot;&quot; then {} else {runtimeDatabaseEncryptionKeyName:$key} end)&#x27;)&quot;
+  fi
+  log &quot;Creating Apigee organization ${ORG}&quot;
+  if is_true &quot;$DRY_RUN&quot;; then info &quot;[dry-run] POST /organizations  body:&quot;; echo &quot;$body&quot; | jq .; return 0; fi
+  api POST &quot;${APIGEE_API}/organizations?parent=projects/${PROJECT_ID}&quot; &quot;$body&quot;
+  api_ok || { err &quot;Org create failed (HTTP ${HTTP_CODE})&quot;; show_response_error; exit 1; }
+  wait_for_op &quot;$(jq -r &#x27;.name&#x27; &quot;$API_OUT&quot;)&quot; &quot;organization ${ORG} creation&quot;
+}
+
+create_instance() {
+  if resource_exists &quot;${APIGEE_API}/organizations/${ORG}/instances/${INSTANCE_NAME}&quot;; then
+    info &quot;Instance ${INSTANCE_NAME} already exists — skipping create.&quot;
+    return 0
+  fi
+  local body
+  body=&quot;$(jq -n --arg name &quot;$INSTANCE_NAME&quot; --arg loc &quot;$RUNTIME_LOCATION&quot; --arg dk &quot;$DISK_KMS_KEY&quot; \
+    &#x27;{name:$name, location:$loc} + (if $dk==&quot;&quot; then {} else {diskEncryptionKeyName:$dk} end)&#x27;)&quot;
+  log &quot;Creating runtime instance ${INSTANCE_NAME} in ${RUNTIME_LOCATION} (this can take 20-45 min)&quot;
+  if is_true &quot;$DRY_RUN&quot;; then info &quot;[dry-run] POST /instances  body:&quot;; echo &quot;$body&quot; | jq .; return 0; fi
+  api POST &quot;${APIGEE_API}/organizations/${ORG}/instances&quot; &quot;$body&quot;
+  api_ok || { err &quot;Instance create failed (HTTP ${HTTP_CODE})&quot;; show_response_error; exit 1; }
+  wait_for_op &quot;$(jq -r &#x27;.name&#x27; &quot;$API_OUT&quot;)&quot; &quot;instance ${INSTANCE_NAME} creation&quot;
+}
+
+create_environment() {
+  if resource_exists &quot;${APIGEE_API}/organizations/${ORG}/environments/${ENV_NAME}&quot;; then
+    info &quot;Environment ${ENV_NAME} already exists — skipping create.&quot;
+  else
+    log &quot;Creating environment ${ENV_NAME}&quot;
+    if is_true &quot;$DRY_RUN&quot;; then info &quot;[dry-run] POST /environments {name:${ENV_NAME}}&quot;;
+    else
+      api POST &quot;${APIGEE_API}/organizations/${ORG}/environments&quot; &quot;$(jq -n --arg n &quot;$ENV_NAME&quot; &#x27;{name:$n}&#x27;)&quot;
+      api_ok || { err &quot;Environment create failed (HTTP ${HTTP_CODE})&quot;; show_response_error; exit 1; }
+      wait_for_op &quot;$(jq -r &#x27;.name&#x27; &quot;$API_OUT&quot;)&quot; &quot;environment ${ENV_NAME} creation&quot;
+    fi
+  fi
+}
+
+attach_env_to_instance() {
+  if api GET &quot;${APIGEE_API}/organizations/${ORG}/instances/${INSTANCE_NAME}/attachments&quot; \
+     &amp;&amp; jq -e --arg e &quot;$ENV_NAME&quot; &#x27;.attachments[]? | select(.environment==$e)&#x27; &quot;$API_OUT&quot; &gt;/dev/null 2&gt;&amp;1; then
+    info &quot;Environment ${ENV_NAME} already attached to instance — skipping.&quot;
+    return 0
+  fi
+  log &quot;Attaching environment ${ENV_NAME} to instance ${INSTANCE_NAME}&quot;
+  if is_true &quot;$DRY_RUN&quot;; then info &quot;[dry-run] POST instance attachment {environment:${ENV_NAME}}&quot;; return 0; fi
+  api POST &quot;${APIGEE_API}/organizations/${ORG}/instances/${INSTANCE_NAME}/attachments&quot; \
+      &quot;$(jq -n --arg e &quot;$ENV_NAME&quot; &#x27;{environment:$e}&#x27;)&quot;
+  api_ok || { err &quot;Instance attachment failed (HTTP ${HTTP_CODE})&quot;; show_response_error; exit 1; }
+  wait_for_op &quot;$(jq -r &#x27;.name&#x27; &quot;$API_OUT&quot;)&quot; &quot;attach ${ENV_NAME} to ${INSTANCE_NAME}&quot;
+}
+
+create_envgroup() {
+  if resource_exists &quot;${APIGEE_API}/organizations/${ORG}/envgroups/${ENVGROUP_NAME}&quot;; then
+    info &quot;Env group ${ENVGROUP_NAME} already exists — skipping create.&quot;
+  else
+    log &quot;Creating environment group ${ENVGROUP_NAME} (host: ${ENVGROUP_HOSTNAME})&quot;
+    if is_true &quot;$DRY_RUN&quot;; then info &quot;[dry-run] POST /envgroups {name:${ENVGROUP_NAME}, hostnames:[${ENVGROUP_HOSTNAME}]}&quot;;
+    else
+      api POST &quot;${APIGEE_API}/organizations/${ORG}/envgroups&quot; \
+          &quot;$(jq -n --arg n &quot;$ENVGROUP_NAME&quot; --arg h &quot;$ENVGROUP_HOSTNAME&quot; &#x27;{name:$n, hostnames:[$h]}&#x27;)&quot;
+      api_ok || { err &quot;Env group create failed (HTTP ${HTTP_CODE})&quot;; show_response_error; exit 1; }
+      wait_for_op &quot;$(jq -r &#x27;.name&#x27; &quot;$API_OUT&quot;)&quot; &quot;env group ${ENVGROUP_NAME} creation&quot;
+    fi
+  fi
+}
+
+attach_env_to_group() {
+  if api GET &quot;${APIGEE_API}/organizations/${ORG}/envgroups/${ENVGROUP_NAME}/attachments&quot; \
+     &amp;&amp; jq -e --arg e &quot;$ENV_NAME&quot; &#x27;.environmentGroupAttachments[]? | select(.environment==$e)&#x27; &quot;$API_OUT&quot; &gt;/dev/null 2&gt;&amp;1; then
+    info &quot;Environment ${ENV_NAME} already attached to env group — skipping.&quot;
+    return 0
+  fi
+  log &quot;Attaching environment ${ENV_NAME} to env group ${ENVGROUP_NAME}&quot;
+  if is_true &quot;$DRY_RUN&quot;; then info &quot;[dry-run] POST envgroup attachment {environment:${ENV_NAME}}&quot;; return 0; fi
+  api POST &quot;${APIGEE_API}/organizations/${ORG}/envgroups/${ENVGROUP_NAME}/attachments&quot; \
+      &quot;$(jq -n --arg e &quot;$ENV_NAME&quot; &#x27;{environment:$e}&#x27;)&quot;
+  api_ok || { err &quot;Env group attachment failed (HTTP ${HTTP_CODE})&quot;; show_response_error; exit 1; }
+  wait_for_op &quot;$(jq -r &#x27;.name&#x27; &quot;$API_OUT&quot;)&quot; &quot;attach ${ENV_NAME} to ${ENVGROUP_NAME}&quot;
+}
+
+summary() {
+  is_true &quot;$DRY_RUN&quot; &amp;&amp; { info &quot;Dry run complete — nothing was changed.&quot;; return 0; }
+  local host=&quot;(pending)&quot; sa=&quot;(n/a)&quot;
+  if api GET &quot;${APIGEE_API}/organizations/${ORG}/instances/${INSTANCE_NAME}&quot;; [[ &quot;$HTTP_CODE&quot; == &quot;200&quot; ]]; then
+    host=&quot;$(jq -r &#x27;.host // &quot;(pending)&quot;&#x27; &quot;$API_OUT&quot;)&quot;
+    sa=&quot;$(jq -r &#x27;.serviceAttachment // &quot;(n/a)&quot;&#x27; &quot;$API_OUT&quot;)&quot;
+  fi
+  cat &lt;&lt;DONE
+
+${c_grn}==================== Provisioning complete ====================${c_off}
+  Organization        : ${ORG}
+  Instance            : ${INSTANCE_NAME}  (${RUNTIME_LOCATION})
+  Instance host (IP)  : ${host}
+  PSC serviceAttachment: ${sa}
+  Environment         : ${ENV_NAME}
+  Env group / host    : ${ENVGROUP_NAME} / ${ENVGROUP_HOSTNAME}
+
+  NEXT STEPS (exposure was intentionally skipped):
+    • Create a load balancer / PSC NEG pointing at the instance above.
+    • Point DNS for ${ENVGROUP_HOSTNAME} at the load balancer front end.
+    • Deploy an API proxy and test:  https://${ENVGROUP_HOSTNAME}/&lt;basepath&gt;
+  Docs: https://cloud.google.com/apigee/docs/api-platform/get-started/install-cli
+${c_grn}==============================================================${c_off}
+DONE
+}
+
+main() {
+  preflight
+  print_plan
+  confirm &quot;Proceed with provisioning?&quot; || die &quot;Aborted by user.&quot;
+  enable_apis
+  ensure_service_agent
+  setup_kms
+  setup_peering
+  create_org
+  create_instance
+  create_environment
+  attach_env_to_instance
+  create_envgroup
+  attach_env_to_group
+  summary
+}
+
+main &quot;$@&quot;
+</script>
+<script>
+(function(){
+  var tpl = document.getElementById("tpl").textContent;
+  var preview = document.querySelector("#preview code");
+  var inputs = Array.prototype.slice.call(document.querySelectorAll("[data-key]"));
+
+  function sanitize(v){ return String(v).replace(/["`\\]/g,""); } // keep shell-quoting intact
+
+  function values(){
+    var o = {};
+    inputs.forEach(function(el){ o[el.getAttribute("data-key")] = sanitize(el.value); });
+    return o;
+  }
+
+  function render(){
+    var v = values();
+    var out = tpl;
+    inputs.forEach(function(el){
+      var k = el.getAttribute("data-key");
+      out = out.split("{{"+k+"}}").join(v[k]);
+    });
+    preview.textContent = out;
+    return out;
+  }
+
+  function conditionals(){
+    var org = document.getElementById("ORG_TYPE").value;
+    var net = document.getElementById("NETWORKING").value;
+    var kms = document.getElementById("PROVISION_KMS").value;
+    setShown('[data-field="PAID_BILLING_TYPE"]', org === "paid");
+    setShown('[data-field="AUTHORIZED_NETWORK"]', net === "peering");
+    setShown('[data-field="PEERING_RANGE_NAME"]', net === "peering");
+    ["KMS_LOCATION","KMS_KEYRING","KMS_KEY"].forEach(function(k){
+      setShown('[data-field="'+k+'"]', kms === "true");
+    });
+  }
+  function setShown(sel, on){
+    var el = document.querySelector(sel); if(el) el.style.display = on ? "" : "none";
+  }
+
+  function validate(){
+    ["PROJECT_ID","SA_EMAIL"].forEach(function(k){
+      var el = document.getElementById(k);
+      el.classList.toggle("invalid", !el.value.trim());
+    });
+  }
+
+  function update(){ conditionals(); validate(); render(); }
+
+  inputs.forEach(function(el){
+    el.addEventListener("input", update);
+    el.addEventListener("change", update);
+  });
+
+  document.getElementById("dl").addEventListener("click", function(){
+    validate();
+    var blob = new Blob([render()], {type:"text/x-shellscript"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "provision-apigee-x.sh";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+    toast("Downloaded");
+  });
+
+  document.getElementById("copy").addEventListener("click", function(){
+    var txt = render();
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(function(){ toast("Copied"); });
+    } else {
+      var ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta);
+      ta.select(); try{document.execCommand("copy");}catch(e){} ta.remove(); toast("Copied");
+    }
+  });
+
+  var toastEl = document.getElementById("toast"), toastT;
+  function toast(msg){ toastEl.textContent=msg; toastEl.classList.add("show");
+    clearTimeout(toastT); toastT=setTimeout(function(){toastEl.classList.remove("show");},1400); }
+
+  update();
+})();
+</script>

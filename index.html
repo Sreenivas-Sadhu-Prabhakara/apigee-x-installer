@@ -121,6 +121,17 @@
 #   - For ORG_TYPE=paid the project must be linked to an active billing account.
 # ---------------------------------------------------------------------------
 
+# This script uses bash features (arrays, [[ ]], ${...}). If it was launched
+# with sh/dash/zsh (e.g. `sh provision-apigee-x.sh`), re-exec it under bash.
+if [ -z &quot;${BASH_VERSION:-}&quot; ]; then
+  exec bash &quot;$0&quot; &quot;$@&quot;
+fi
+# Guard against ancient/odd bash; 3.2 (macOS default) and up are fine.
+if [ &quot;${BASH_VERSINFO:-0}&quot; -lt 3 ]; then
+  echo &quot;This script needs bash 3.2+ (found: ${BASH_VERSION:-unknown}).&quot; &gt;&amp;2
+  exit 1
+fi
+
 set -euo pipefail
 
 # ===========================================================================
@@ -200,9 +211,11 @@ confirm() {
 # Fresh, short-lived impersonated token for every REST call (survives long ops).
 get_token() {
   gcloud auth print-access-token --impersonate-service-account=&quot;$SA_EMAIL&quot; 2&gt;/dev/null \
-    || die &quot;Could not mint an access token by impersonating ${SA_EMAIL}.
-    Ensure you have roles/iam.serviceAccountTokenCreator on that service account
-    and that &#x27;gcloud auth login&#x27; has been completed.&quot;
+    || die &quot;Could not mint an access token by impersonating ${SA_EMAIL}. Check that:
+    1. &#x27;gcloud auth login&#x27; has been completed (an active account exists);
+    2. your active account has roles/iam.serviceAccountTokenCreator on ${SA_EMAIL};
+    3. the IAM Service Account Credentials API is enabled:
+         gcloud services enable iamcredentials.googleapis.com --project=${PROJECT_ID}&quot;
 }
 
 # api METHOD URL [BODY] -&gt; writes response body to $API_OUT, sets $HTTP_CODE.
@@ -271,17 +284,39 @@ preflight() {
   for c in gcloud curl jq; do command -v &quot;$c&quot; &gt;/dev/null 2&gt;&amp;1 || die &quot;Missing dependency: $c&quot;; done
   [[ -n &quot;$PROJECT_ID&quot; ]] || die &quot;PROJECT_ID is empty — set it in the USER CONFIG block.&quot;
   [[ -n &quot;$SA_EMAIL&quot;   ]] || die &quot;SA_EMAIL is empty — set it in the USER CONFIG block.&quot;
-  if [[ &quot;$BILLING_TYPE&quot; == &quot;PAYG&quot; || &quot;$BILLING_TYPE&quot; == &quot;SUBSCRIPTION&quot; || &quot;$ORG_TYPE&quot; == &quot;paid&quot; ]]; then
+  if [[ &quot;$ORG_TYPE&quot; == &quot;paid&quot; ]]; then
     is_true &quot;$PROVISION_KMS&quot; || warn &quot;Paid orgs require a runtime DB encryption key; PROVISION_KMS is false.&quot;
   fi
+
+  # The impersonated token is minted FROM the active caller&#x27;s credentials.
+  local caller
+  caller=&quot;$(gcloud config get-value account 2&gt;/dev/null || true)&quot;
+  [[ -n &quot;$caller&quot; &amp;&amp; &quot;$caller&quot; != &quot;(unset)&quot; ]] || die &quot;No active gcloud account. Run: gcloud auth login&quot;
+  info &quot;Active caller: ${caller}&quot;
+
+  # Impersonation goes through the IAM Service Account Credentials API, which
+  # must be enabled on the project. Enable it as the caller (best-effort).
+  if ! service_enabled iamcredentials.googleapis.com &quot;&quot;; then
+    info &quot;Enabling iamcredentials.googleapis.com (required for impersonation)...&quot;
+    is_true &quot;$DRY_RUN&quot; || gcloud services enable iamcredentials.googleapis.com --project=&quot;$PROJECT_ID&quot; 2&gt;/dev/null \
+      || warn &quot;Could not enable iamcredentials.googleapis.com as ${caller}; if impersonation fails, enable it manually.&quot;
+  fi
+
   # Impersonation must actually work before we start creating things.
   log &quot;Verifying impersonation of ${SA_EMAIL} ...&quot;
   get_token &gt;/dev/null
   log &quot;Impersonation OK.&quot;
-  # Confirm the project is reachable &amp; capture its number.
-  PROJECT_NUMBER=&quot;$(gcloud projects describe &quot;$PROJECT_ID&quot; \
-      --impersonate-service-account=&quot;$SA_EMAIL&quot; --format=&#x27;value(projectNumber)&#x27; 2&gt;/dev/null)&quot; \
-    || die &quot;Cannot describe project &#x27;${PROJECT_ID}&#x27; as ${SA_EMAIL}.&quot;
+
+  # Project number: try the caller first, then the impersonated SA (a minimal
+  # SA with only apigee.admin cannot read the project — don&#x27;t require it to).
+  PROJECT_NUMBER=&quot;$(gcloud projects describe &quot;$PROJECT_ID&quot; --format=&#x27;value(projectNumber)&#x27; 2&gt;/dev/null || true)&quot;
+  if [[ -z &quot;$PROJECT_NUMBER&quot; ]]; then
+    PROJECT_NUMBER=&quot;$(gcloud projects describe &quot;$PROJECT_ID&quot; \
+        --impersonate-service-account=&quot;$SA_EMAIL&quot; --format=&#x27;value(projectNumber)&#x27; 2&gt;/dev/null || true)&quot;
+  fi
+  [[ -n &quot;$PROJECT_NUMBER&quot; ]] || die &quot;Could not read the project number for &#x27;${PROJECT_ID}&#x27;.
+    Grant roles/resourcemanager.projects.get (e.g. roles/viewer) to ${caller} or ${SA_EMAIL},
+    or confirm the project id is correct and billing/permissions are set.&quot;
   APIGEE_AGENT=&quot;service-${PROJECT_NUMBER}@gcp-sa-apigee.iam.gserviceaccount.com&quot;
 }
 
@@ -306,17 +341,61 @@ ${c_blu}====================================================================${c_
 PLAN
 }
 
+# service_enabled API [SA_EMAIL]  -&gt; 0 if API already enabled.
+# Pass an SA email as $2 to check via impersonation; omit to check as the caller.
+service_enabled() {
+  local api=&quot;$1&quot; as=&quot;${2:-}&quot;
+  if [[ -n &quot;$as&quot; ]]; then
+    gcloud services list --enabled --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$as&quot; \
+      --format=&#x27;value(config.name)&#x27; 2&gt;/dev/null | grep -Fxq &quot;$api&quot;
+  else
+    gcloud services list --enabled --project=&quot;$PROJECT_ID&quot; \
+      --format=&#x27;value(config.name)&#x27; 2&gt;/dev/null | grep -Fxq &quot;$api&quot;
+  fi
+}
+
 enable_apis() {
-  local apis=(apigee.googleapis.com serviceusage.googleapis.com compute.googleapis.com)
+  local apis=(apigee.googleapis.com serviceusage.googleapis.com compute.googleapis.com iamcredentials.googleapis.com)
   is_true &quot;$PROVISION_KMS&quot; &amp;&amp; apis+=(cloudkms.googleapis.com)
   [[ &quot;$NETWORKING&quot; == peering ]] &amp;&amp; apis+=(servicenetworking.googleapis.com)
-  log &quot;Enabling APIs: ${apis[*]}&quot;
-  gc services enable &quot;${apis[@]}&quot; --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot;
+
+  # Fetch already-enabled APIs once. If the SA can&#x27;t list them we get an empty
+  # string and fall back to attempting enable (tolerating &quot;already enabled&quot;).
+  local enabled
+  enabled=&quot;$(gcloud services list --enabled --project=&quot;$PROJECT_ID&quot; \
+      --impersonate-service-account=&quot;$SA_EMAIL&quot; --format=&#x27;value(config.name)&#x27; 2&gt;/dev/null || true)&quot;
+
+  local missing=() a
+  for a in &quot;${apis[@]}&quot;; do
+    if printf &#x27;%s\n&#x27; &quot;$enabled&quot; | grep -Fxq &quot;$a&quot;; then
+      info &quot;API already enabled: $a&quot;
+    else
+      missing+=(&quot;$a&quot;)
+    fi
+  done
+
+  if [[ &quot;${#missing[@]}&quot; -eq 0 ]]; then
+    log &quot;All required APIs already enabled — nothing to enable.&quot;
+    return 0
+  fi
+
+  log &quot;Enabling APIs: ${missing[*]}&quot;
+  is_true &quot;$DRY_RUN&quot; &amp;&amp; { info &quot;[dry-run] gcloud services enable ${missing[*]}&quot;; return 0; }
+
+  # Non-fatal: already-enabled APIs (or an admin enabling them out-of-band)
+  # must not abort the whole run.
+  if ! gcloud services enable &quot;${missing[@]}&quot; --project=&quot;$PROJECT_ID&quot; \
+        --impersonate-service-account=&quot;$SA_EMAIL&quot;; then
+    warn &quot;Could not enable one or more APIs: ${missing[*]}&quot;
+    warn &quot;  - If they are in fact already enabled, this is safe to ignore.&quot;
+    warn &quot;  - Otherwise grant roles/serviceusage.serviceUsageAdmin to ${SA_EMAIL}, or run:&quot;
+    warn &quot;      gcloud services enable ${missing[*]} --project=${PROJECT_ID}&quot;
+  fi
 }
 
 ensure_service_agent() {
   log &quot;Ensuring the Apigee service agent exists (${APIGEE_AGENT})&quot;
-  gc beta services identity create --service=apigee.googleapis.com \
+  gc beta services identity create --service=apigee.googleapis.com --quiet \
      --project=&quot;$PROJECT_ID&quot; --impersonate-service-account=&quot;$SA_EMAIL&quot; || true
 }
 
